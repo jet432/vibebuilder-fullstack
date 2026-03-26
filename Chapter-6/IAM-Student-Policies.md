@@ -79,7 +79,8 @@ Add student IAM users to that group.
         "ec2:DescribeInstanceCreditSpecifications",
         "ec2:DescribeNetworkInterfaces",
         "ec2:DescribeAvailabilityZones",
-        "ec2:DescribeAccountAttributes"
+        "ec2:DescribeAccountAttributes",
+        "ec2:DescribeSecurityGroupRules"
       ],
       "Resource": "*"
     },
@@ -100,6 +101,7 @@ Add student IAM users to that group.
         "ec2:CreateSecurityGroup",
         "ec2:AuthorizeSecurityGroupIngress",
         "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
         "ec2:RevokeSecurityGroupEgress",
         "ec2:DeleteSecurityGroup"
       ],

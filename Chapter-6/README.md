@@ -13,6 +13,7 @@ This chapter covers the concepts and hands-on skills needed to provision cloud i
 | [Lab — Deploy to EC2 with CI/CD](./Lab-Deploy-EC2-CICD.md) | End-to-end lab: launch EC2 with Terraform, deploy nginx with a shell script, then automate with GitHub Actions |
 | [Lab — Lambda S3 Trigger](./Lab-Lambda-S3-Trigger.md) | Serverless lab: create an S3 bucket, trigger a Lambda function on file upload, view logs in CloudWatch |
 | [Lab — Lambda REST API](./Lab-Lambda-REST-API.md) | Serverless API lab: expose a Lambda function as a REST API using API Gateway with GET and POST endpoints |
+| [Lab — Lambda + MongoDB on EC2](./Lab-Lambda-MongoDB-EC2.md) | Full-stack serverless lab: API Gateway → Lambda → pymongo → MongoDB running on EC2 |
 
 
 ---
