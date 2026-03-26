@@ -15,6 +15,7 @@ Add student IAM users to that group.
 | `StudentIAMPolicy` | IAM (scoped to Lambda roles only) | Chapter 6, 7 |
 | `StudentTaggingPolicy` | Resource Groups Tagging API | Chapter 6, 7 |
 | `StudentCloudWatchPolicy` | CloudWatch Metrics & Logs | Chapter 6, 7 |
+| `StudentSelfServicePolicy` | IAM self-service (change own password) | All chapters |
 
 ---
 
@@ -174,7 +175,9 @@ Add student IAM users to that group.
         "s3:GetEncryptionConfiguration",
         "s3:PutEncryptionConfiguration",
         "s3:GetLifecycleConfiguration",
-        "s3:GetReplicationConfiguration"
+        "s3:GetReplicationConfiguration",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetBucketObjectLockConfiguration"
       ],
       "Resource": "arn:aws:s3:::student-*"
     },
@@ -293,7 +296,8 @@ Add student IAM users to that group.
       "Sid": "LambdaListAll",
       "Effect": "Allow",
       "Action": [
-        "lambda:ListFunctions"
+        "lambda:ListFunctions",
+        "lambda:ListVersionsByFunction"
       ],
       "Resource": "*"
     },
@@ -543,6 +547,175 @@ Add student IAM users to that group.
     }
   ]
 }
+```
+
+---
+
+## Policy 9 — StudentSelfServicePolicy
+
+> Allows students to change their own password after first login and view the account password policy.
+> Scoped to the calling user only via `aws:username` condition — students cannot change anyone else's password.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowSelfService",
+      "Effect": "Allow",
+      "Action": [
+        "iam:ChangePassword",
+        "iam:GetUser",
+        "iam:CreateAccessKey",
+        "iam:DeleteAccessKey",
+        "iam:ListAccessKeys",
+        "iam:UpdateAccessKey"
+      ],
+      "Resource": "arn:aws:iam::*:user/${aws:username}"
+    },
+    {
+      "Sid": "AllowIAMConsoleReads",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetAccountPasswordPolicy",
+        "iam:ListUsers",
+        "iam:ListGroups",
+        "iam:GetAccountSummary"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+---
+
+## Budget Control — $75 Spending Limit
+
+> IAM policies cannot enforce a dollar limit directly. The correct approach is **AWS Budgets + Budget Actions** — when spending hits $75, AWS automatically attaches a Deny-All policy to the StudentGroup, blocking all further actions.
+
+### How it works
+
+```
+Spending reaches $75 → AWS Budgets triggers action → Attaches DenyAllPolicy to StudentGroup → Students can no longer create resources
+```
+
+### Step 1 — Create the DenyAll policy
+
+Create this policy in IAM. It will only be active when the budget action attaches it.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyAllWhenBudgetExceeded",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+```bash
+aws iam create-policy \
+  --policy-name StudentDenyAllOnBudgetExceeded \
+  --policy-document file://StudentDenyAllOnBudgetExceeded.json
+```
+
+### Step 2 — Create a Budget Actions IAM Role
+
+AWS Budgets needs a role to attach/detach policies on your behalf:
+
+```bash
+# Create the trust policy file
+cat > budget-trust.json << 'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "budgets.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+
+# Create the role
+aws iam create-role \
+  --role-name BudgetActionsRole \
+  --assume-role-policy-document file://budget-trust.json
+
+# Attach the AWS managed policy for Budget Actions
+aws iam attach-role-policy \
+  --role-name BudgetActionsRole \
+  --policy-arn arn:aws:iam::aws:policy/AWSBudgetsActionsWithAWSResourceControlAccess
+```
+
+### Step 3 — Create the Budget with Action
+
+```bash
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+DENY_POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/StudentDenyAllOnBudgetExceeded"
+ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/BudgetActionsRole"
+
+# Create the budget
+aws budgets create-budget \
+  --account-id "$ACCOUNT_ID" \
+  --budget '{
+    "BudgetName": "StudentGroupBudget",
+    "BudgetLimit": { "Amount": "75", "Unit": "USD" },
+    "TimeUnit": "MONTHLY",
+    "BudgetType": "COST"
+  }'
+
+# Attach a Budget Action — applies DenyAll to StudentGroup at 100% of $75
+aws budgets create-budget-action \
+  --account-id "$ACCOUNT_ID" \
+  --budget-name "StudentGroupBudget" \
+  --notification-type ACTUAL \
+  --action-type APPLY_IAM_POLICY \
+  --action-threshold '{"ActionThresholdValue": 100, "ActionThresholdType": "PERCENTAGE"}' \
+  --definition "{
+    \"IamActionDefinition\": {
+      \"PolicyArn\": \"${DENY_POLICY_ARN}\",
+      \"Groups\": [\"StudentGroup\"]
+    }
+  }" \
+  --execution-role-arn "$ROLE_ARN" \
+  --approval-model AUTOMATIC
+```
+
+### Step 4 — Add an email alert at $50 (early warning)
+
+```bash
+aws budgets create-notification \
+  --account-id "$ACCOUNT_ID" \
+  --budget-name "StudentGroupBudget" \
+  --notification '{
+    "NotificationType": "ACTUAL",
+    "ComparisonOperator": "GREATER_THAN",
+    "Threshold": 66,
+    "ThresholdType": "PERCENTAGE"
+  }' \
+  --subscribers '[{
+    "SubscriptionType": "EMAIL",
+    "Address": "your-email@example.com"
+  }]'
+```
+
+> This sends an alert at ~$50 (66% of $75) so you have time to act before the hard cutoff at $75.
+
+### To manually re-enable students after the bootcamp resets
+
+```bash
+aws iam detach-group-policy \
+  --group-name StudentGroup \
+  --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/StudentDenyAllOnBudgetExceeded"
 ```
 
 ---
