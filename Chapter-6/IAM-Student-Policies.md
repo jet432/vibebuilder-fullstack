@@ -331,7 +331,7 @@ Add student IAM users to that group.
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "APIGatewayManagement",
+      "Sid": "APIGatewayFullManagement",
       "Effect": "Allow",
       "Action": [
         "apigateway:GET",
@@ -341,10 +341,29 @@ Add student IAM users to that group.
         "apigateway:PATCH"
       ],
       "Resource": [
-        "arn:aws:apigateway:us-east-1::/restapis",
-        "arn:aws:apigateway:us-east-1::/restapis/*",
         "arn:aws:apigateway:us-east-1::/apis",
-        "arn:aws:apigateway:us-east-1::/apis/*"
+        "arn:aws:apigateway:us-east-1::/apis/*",
+        "arn:aws:apigateway:us-east-1::/restapis",
+        "arn:aws:apigateway:us-east-1::/restapis/*"
+      ]
+    },
+    {
+      "Sid": "APIGatewayConsoleSupport",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET"
+      ],
+      "Resource": [
+        "arn:aws:apigateway:us-east-1::/account",
+        "arn:aws:apigateway:us-east-1::/tags/*",
+        "arn:aws:apigateway:us-east-1::/usageplans",
+        "arn:aws:apigateway:us-east-1::/usageplans/*",
+        "arn:aws:apigateway:us-east-1::/apikeys",
+        "arn:aws:apigateway:us-east-1::/apikeys/*",
+        "arn:aws:apigateway:us-east-1::/vpclinks",
+        "arn:aws:apigateway:us-east-1::/vpclinks/*",
+        "arn:aws:apigateway:us-east-1::/domainnames",
+        "arn:aws:apigateway:us-east-1::/domainnames/*"
       ]
     }
   ]
